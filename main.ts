@@ -1,11 +1,13 @@
-import { App, Modal, normalizePath, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Modal, normalizePath, Notice, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
 
 interface MeetingNotesPluginSettings {
 	meetingNotesFolder: string;
+	meetingNoteTemplatePath: string
 }
 
 const DEFAULT_SETTINGS: MeetingNotesPluginSettings = {
-	meetingNotesFolder: 'Meeting Notes'
+	meetingNotesFolder: 'Meeting Notes',
+	meetingNoteTemplatePath: ''
 }
 
 export default class MeetingNotesPlugin extends Plugin {
@@ -85,10 +87,25 @@ class SampleModal extends Modal {
 				btn
 					.setButtonText("Submit")
 					.setCta()
-					.onClick(() => {
+					.onClick(async () => {
 						this.close();
+						
+						let templatePath = this.settings.meetingNoteTemplatePath
+						
+						let template: string;
 
-						let template = `---
+						if (templatePath !== '') {
+							let templateFile = this.app.vault.getAbstractFileByPath(normalizePath(templatePath) + ".md")
+							console.log(templatePath)
+							if (templateFile instanceof TFile) {
+								template = await this.app.vault.read(templateFile)
+								template = template.replace("{{date}}", date)
+							} else {
+								template = ""
+							}
+						} else {
+
+						template = `---
 date: ${date}
 ---
 
@@ -110,7 +127,7 @@ date: ${date}
 *Any action items for myself.*
 - 
 `
-
+}
 						this.app.vault.create(normalizePath(`${this.settings.meetingNotesFolder}/${date} - ${this.meetingNoteTitle}.md`), template).then((res) => {
 
 							let leaf = this.app.workspace.getLeaf(true)
@@ -151,6 +168,16 @@ class SampleSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.meetingNotesFolder)
 				.onChange(async (value) => {
 					this.plugin.settings.meetingNotesFolder = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Meeting Note Template Path')
+			.setDesc('Template to be used for new notes')
+			.addText(text => text
+				.setValue(this.plugin.settings.meetingNoteTemplatePath)
+				.onChange(async (value) => {
+					this.plugin.settings.meetingNoteTemplatePath = value;
 					await this.plugin.saveSettings();
 				}));
 	}
