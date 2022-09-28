@@ -1,67 +1,29 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Modal, normalizePath, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
 
-// Remember to rename these classes and interfaces!
-
-interface MyPluginSettings {
-	mySetting: string;
+interface MeetingNotesPluginSettings {
+	meetingNotesFolder: string;
 }
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
+const DEFAULT_SETTINGS: MeetingNotesPluginSettings = {
+	meetingNotesFolder: 'Meeting Notes'
 }
 
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+export default class MeetingNotesPlugin extends Plugin {
+	settings: MeetingNotesPluginSettings;
 
 	async onload() {
 		await this.loadSettings();
 
-		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
-		// Perform additional things with the ribbon
-		ribbonIconEl.addClass('my-plugin-ribbon-class');
-
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status Bar Text');
-
-		// This adds a simple command that can be triggered anywhere
+		// Add a command to create a new meeting note
 		this.addCommand({
-			id: 'open-sample-modal-simple',
-			name: 'Open sample modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'sample-editor-command',
-			name: 'Sample editor command',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection('Sample Editor Command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-sample-modal-complex',
-			name: 'Open sample modal (complex)',
+			id: 'create-meeting-note',
+			name: 'Create meeting note',
 			checkCallback: (checking: boolean) => {
 				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
-
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
+				if (!checking) {
+					new SampleModal(this.app, this.settings).open();
 				}
+				return true;
 			}
 		});
 
@@ -92,45 +54,103 @@ export default class MyPlugin extends Plugin {
 }
 
 class SampleModal extends Modal {
-	constructor(app: App) {
+
+	meetingNoteTitle = ""
+	settings: MeetingNotesPluginSettings
+
+	constructor(app: App, settings: MeetingNotesPluginSettings) {
 		super(app);
+		this.settings = settings
 	}
 
 	onOpen() {
-		const {contentEl} = this;
-		contentEl.setText('Woah!');
+		const { contentEl } = this;
+
+		contentEl.createEl("h1", { text: "Create meeting note" });
+
+		let date = new Date().toISOString().split('T')[0]
+
+		let resTitle = contentEl.createEl("p", { text: date });
+
+		new Setting(contentEl)
+			.setName("Title")
+			.addText((text) =>
+				text.onChange((value) => {
+					this.meetingNoteTitle = value
+					resTitle.innerHTML = `${date} - ${value}`
+				}));
+
+		new Setting(contentEl)
+			.addButton((btn) =>
+				btn
+					.setButtonText("Submit")
+					.setCta()
+					.onClick(() => {
+						this.close();
+
+						let template = `---
+date: ${date}
+---
+
+## Context
+*Link relevant projects, technologies, people.*
+
+## Attendees
+*Link attendees to the meeting.*
+
+## Outline Notes
+*Take outlining notes.*
+- 
+
+## Decisions
+*Take note of any decisions that were taken during the meeting.*
+- 
+
+## Action Items
+*Any action items for myself.*
+- 
+`
+
+						this.app.vault.create(normalizePath(`${this.settings.meetingNotesFolder}/${date} - ${this.meetingNoteTitle}.md`), template).then((res) => {
+
+							let leaf = this.app.workspace.getLeaf(true)
+							leaf.openFile(res)
+							console.log(res)
+						}).catch((err) => {
+							new Notice(String(err))
+						})
+					}));
 	}
 
+
 	onClose() {
-		const {contentEl} = this;
+		const { contentEl } = this;
 		contentEl.empty();
 	}
 }
 
 class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+	plugin: MeetingNotesPlugin;
 
-	constructor(app: App, plugin: MyPlugin) {
+	constructor(app: App, plugin: MeetingNotesPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
 
 	display(): void {
-		const {containerEl} = this;
+		const { containerEl } = this;
 
 		containerEl.empty();
 
-		containerEl.createEl('h2', {text: 'Settings for my awesome plugin.'});
+		containerEl.createEl('h2', { text: 'Meeting Notes' });
 
 		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
+			.setName('Meeting Note Folder')
+			.setDesc('New meeting notes will be created in this folder')
 			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
+				.setValue(this.plugin.settings.meetingNotesFolder)
 				.onChange(async (value) => {
-					console.log('Secret: ' + value);
-					this.plugin.settings.mySetting = value;
+					this.plugin.settings.meetingNotesFolder = value;
 					await this.plugin.saveSettings();
 				}));
 	}
