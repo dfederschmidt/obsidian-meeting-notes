@@ -1,4 +1,4 @@
-import { App, Modal, normalizePath, Notice, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
+import { App, MarkdownView, Modal, normalizePath, Notice, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
 
 interface MeetingNotesPluginSettings {
 	meetingNotesFolder: string;
@@ -90,6 +90,7 @@ class SampleModal extends Modal {
 					.onClick(async () => {
 						this.close();
 						
+
 						let templatePath = this.settings.meetingNoteTemplatePath
 						
 						let template: string;
@@ -128,9 +129,17 @@ date: ${date}
 - 
 `
 }
-						this.app.vault.create(normalizePath(`${this.settings.meetingNotesFolder}/${date} - ${this.meetingNoteTitle}.md`), template).then((res) => {
 
-							let leaf = this.app.workspace.getLeaf(true)
+							const title = `${this.settings.meetingNotesFolder}/${date} - ${this.meetingNoteTitle}`
+							this.app.vault.create(normalizePath(`${title}.md`), template).then((res) => {
+							
+							const view = this.app.workspace.getActiveViewOfType(MarkdownView)
+
+							if (view) {
+								view.editor.replaceRange(`[[${title}]]`, view.editor.getCursor())
+							}
+							
+							let leaf = this.app.workspace.getLeaf("split")
 							leaf.openFile(res)
 							console.log(res)
 						}).catch((err) => {
